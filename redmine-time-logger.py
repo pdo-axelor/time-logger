@@ -11,6 +11,7 @@ import gettext
 import itertools
 import json
 import os
+import redminelib.exceptions
 import sys
 
 DEFAULT_DAILY_HOURS = 7.8
@@ -69,26 +70,44 @@ class TimeLogger:
         username_token = redmine_config.get('username')
         password_token = redmine_config.get('password')
 
+        activity_name = redmine_config.get('activity')
+        if not activity_name:
+            activity_name = input('Default activity name: ')
+            redmine_config['activity'] = activity_name
+
         if not url:
             url = input(f'Redmine URL: ')
+            if ':' not in url:
+                url = 'https://' + url
             redmine_config['url'] = url
 
-        if username_token:
-            username = fernet.decrypt(username_token.encode()).decode()
-        else:
-            username = input(f'Username: ')
-            redmine_config['username'] = fernet.encrypt(
-                username.encode()).decode()
+        while True:
+            try:
+                if username_token:
+                    username = fernet.decrypt(username_token.encode()).decode()
+                else:
+                    username = input(f'Username: ')
+                    redmine_config['username'] = fernet.encrypt(
+                        username.encode()).decode()
 
-        if password_token:
-            password = fernet.decrypt(password_token.encode()).decode()
-        else:
-            password = getpass.getpass(f'Password: ')
-            redmine_config['password'] = fernet.encrypt(
-                password.encode()).decode()
+                if password_token:
+                    password = fernet.decrypt(password_token.encode()).decode()
+                else:
+                    password = getpass.getpass(f'Password: ')
+                    redmine_config['password'] = fernet.encrypt(
+                        password.encode()).decode()
 
-        self.redmine = Redmine(url, username=username, password=password)
-        self.current_user = self.redmine.user.get('current')
+                self.redmine = Redmine(
+                    url, username=username, password=password)
+                self.current_user = self.redmine.user.get('current')
+                break
+            except redminelib.exceptions.AuthError as e:
+                print(str(e), file=sys.stderr)
+                username_token = None
+                password_token = None
+
+        self.default_activity = next(e for e in self.redmine.enumeration.filter(
+            resource='time_entry_activities') if e.name == activity_name)
 
         if json.dumps(config, sort_keys=True) != original_config_dump:
             with open(config_path, 'w') as file:
@@ -157,24 +176,35 @@ class TimeLogger:
         print()
         self.allocate(allocations, to_allocate_issues)
 
+    @classmethod
+    def get_issue(cls, time_entry):
+        try:
+            return time_entry.issue
+        except redminelib.exceptions.ResourceAttrError:
+            return None
+
     def run(self):
         worked_issue_ids = set()
         existing_time_entries = set()
         for time_entry in self.redmine.time_entry.filter(spent_on=self.log_date, user_id='me', sort='spent_on:desc'):
             self.remaining_hours -= time_entry.hours
-            worked_issue_ids.add(time_entry.issue.id)
+            issue = self.get_issue(time_entry)
+            if issue:
+                worked_issue_ids.add(issue.id)
             existing_time_entries.add(time_entry)
 
         print(
             _(f'Hours already logged: {self.daily_hours - self.remaining_hours}'))
         for time_entry in existing_time_entries:
-            issue = self.redmine.issue.get(time_entry.issue.id)
+            issue = self.get_issue(time_entry)
+            if issue:
+                issue = self.redmine.issue.get(time_entry.issue.id)
             print(
                 f'{self.format_issue(issue)}: {time_entry.comments} {time_entry.hours}')
         print()
 
         if self.remaining_hours == 0:
-            print(_(f'All done!'))
+            print(_(f'All already done!'))
             return
 
         if self.remaining_hours < 0:
@@ -205,9 +235,6 @@ class TimeLogger:
             print(_(f'Nothing to allocate'))
             return
 
-        on_ticket = next(e for e in self.redmine.enumeration.filter(
-            resource='time_entry_activities') if e.name == 'On ticket')
-
         print(_(f'Time log to create:', 'Time logs to create:', len(allocations)))
         for allocation in allocations:
             print(
@@ -223,7 +250,7 @@ class TimeLogger:
                 spent_on=self.log_date,
                 hours=f'{allocation.hours:.2f}',
                 comments=allocation.comment,
-                activity_id=on_ticket.id
+                activity_id=self.default_activity.id
             )
 
         print('Done')
@@ -262,7 +289,7 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--log-date', help='log date', default='today')
     parser.add_argument('--daily-hours', help='daily hours',
-                        default=DEFAULT_DAILY_HOURS)
+                        default=DEFAULT_DAILY_HOURS, type=float)
     options = parser.parse_args()
 
     if options.log_date == 'today':
