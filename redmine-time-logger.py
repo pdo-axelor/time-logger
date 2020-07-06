@@ -203,7 +203,7 @@ class TimeLogger:
             existing_time_entries.add(time_entry)
 
         print(
-            _(f'Hours already logged: {self.daily_hours - self.remaining_hours}'))
+            _(f'Hours already logged: {self.daily_hours - self.remaining_hours:.2f}'))
         for time_entry in existing_time_entries:
             issue = self.get_issue(time_entry)
             if issue:
@@ -215,7 +215,7 @@ class TimeLogger:
                     f'{time_entry.project}: {time_entry.comments} {time_entry.hours}')
         print()
 
-        if self.remaining_hours == 0:
+        if round(self.remaining_hours, 2) == 0:
             print(_(f'All already done!'))
             return
 
