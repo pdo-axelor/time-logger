@@ -70,11 +70,6 @@ class TimeLogger:
         username_token = redmine_config.get('username')
         password_token = redmine_config.get('password')
 
-        activity_name = redmine_config.get('activity')
-        if not activity_name:
-            activity_name = input('Default activity name: ')
-            redmine_config['activity'] = activity_name
-
         if not url:
             url = input(f'Redmine URL: ')
             if ':' not in url:
@@ -106,8 +101,21 @@ class TimeLogger:
                 username_token = None
                 password_token = None
 
-        self.default_activity = next(e for e in self.redmine.enumeration.filter(
-            resource='time_entry_activities') if e.name == activity_name)
+        activities = list(self.redmine.enumeration.filter(
+            resource='time_entry_activities'))
+
+        activity_name = redmine_config.get('activity')
+        if activity_name:
+            self.default_activity = next(
+                e for e in activities if e.name == activity_name)
+        else:
+            print('Activities:')
+            for activity in activities:
+                print(f'#{activity.id}: {activity.name}')
+            activity_id = int(input('Default activity ID: '))
+            self.default_activity = next(
+                e for e in activities if e.id == activity_id)
+            redmine_config['activity'] = self.default_activity.name
 
         if json.dumps(config, sort_keys=True) != original_config_dump:
             with open(config_path, 'w') as file:
@@ -168,11 +176,12 @@ class TimeLogger:
 
     def run_to_allocate_issues(self, allocations, to_allocate_issues):
         print(
-            _(f'Remaining {self.remaining_hours} hours to allocate on {len(to_allocate_issues)} issue updated by you on {self.log_date}:',
-                f'Remaining {self.remaining_hours} hours to allocate on {len(to_allocate_issues)} issues updated by you on {self.log_date}:',
+            _(f'Remaining {self.remaining_hours} hours to allocate on {len(to_allocate_issues)} issue ({self.log_date}):',
+                f'Remaining {self.remaining_hours} hours to allocate on {len(to_allocate_issues)} issues ({self.log_date}):',
                 len(to_allocate_issues)))
         for issue in to_allocate_issues:
-            print(f'{self.format_issue(issue)}')
+            print(
+                f'{self.format_issue(issue)}{"" if self.commented_by_current_user(issue) else f" (not updated by you)"}')
         print()
         self.allocate(allocations, to_allocate_issues)
 
@@ -217,10 +226,7 @@ class TimeLogger:
         to_allocate_issues = []
         for issue in (e for e in self.redmine.issue.filter(limit=50, updated_on=self.log_date, updated_by='me', status_id='*', sort='id')
                       if e.id not in worked_issue_ids):
-            if self.commented_by_current_user(issue):
-                to_allocate_issues.append(issue)
-            else:
-                print(_(f'Not updated by you: {self.format_issue(issue)}'))
+            to_allocate_issues.append(issue)
 
         allocations = []
 
@@ -231,8 +237,12 @@ class TimeLogger:
             print()
 
         if self.remaining_hours > 0:
-            self.run_suggested_additional_issues(
-                allocations, to_allocate_issues)
+            if to_allocate_issues:
+                print(_(f'Hours still remaining: {self.remaining_hours}'))
+            search_suggested = input(
+                _(f'Search for more issues? (Y/n): ')).lower() != 'n'
+            if search_suggested:
+                self.run_suggested_additional_issues(allocations)
 
         if not allocations:
             print(_(f'Nothing to allocate'))
@@ -258,10 +268,7 @@ class TimeLogger:
 
         print('Done')
 
-    def run_suggested_additional_issues(self, allocations, to_allocate_issues):
-        if to_allocate_issues:
-            print(_(f'Hours still remaining: {self.remaining_hours}'))
-
+    def run_suggested_additional_issues(self, allocations):
         suggested_additional_issues = []
         print(_(f'Suggested recently updated open issues assigned to you:'))
         for issue in self.redmine.issue.filter(limit=20, assigned_to_id='me', status_id='open', sort='updated_on:desc'):
