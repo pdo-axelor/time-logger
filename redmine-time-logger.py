@@ -280,14 +280,23 @@ class TimeLogger:
                 break
         print()
 
+        suggested_additional_issue_map = {
+            e.id: e for e in suggested_additional_issues}
         default_additional_issues = suggested_additional_issues[:5]
         default_additional_issue_ids = ' '.join(
             str(issue.id) for issue in default_additional_issues)
         additional_issue_ids = [int(e) for e in input(
             _(f'Additional issue IDs (default: {default_additional_issue_ids}): ')).split()]
         if additional_issue_ids:
-            additional_issues = [self.redmine.issue.get(
-                id) for id in additional_issue_ids]
+            additional_issues = []
+            for id in additional_issue_ids:
+                if not id:
+                    break
+                if id in suggested_additional_issue_map:
+                    issue = suggested_additional_issue_map[id]
+                else:
+                    issue = self.redmine.issue.get(id)
+                additional_issues.append(issue)
         else:
             additional_issues = default_additional_issues
 
