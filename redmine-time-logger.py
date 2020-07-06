@@ -199,8 +199,11 @@ class TimeLogger:
             issue = self.get_issue(time_entry)
             if issue:
                 issue = self.redmine.issue.get(time_entry.issue.id)
-            print(
-                f'{self.format_issue(issue)}: {time_entry.comments} {time_entry.hours}')
+                print(
+                    f'{self.format_issue(issue)}: {time_entry.comments} {time_entry.hours}')
+            else:
+                print(
+                    f'{time_entry.project}: {time_entry.comments} {time_entry.hours}')
         print()
 
         if self.remaining_hours == 0:
