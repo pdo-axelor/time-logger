@@ -35,36 +35,51 @@ Allocation = namedtuple('Allocation', ['issue', 'hours', 'comment'])
 
 
 class TimeLogger:
-    config_path = '~/.time-logger.json'
+    config_path = os.path.expanduser('~/.time-logger.json')
 
     def __init__(self, log_date, daily_hours):
+        self.read_config()
         self.log_date = log_date
-        self.daily_hours = daily_hours
+        self.configure_daily_hours(daily_hours)
         self.remaining_hours = self.daily_hours
         self.open_redmine()
+        self.write_config()
+
+    def read_config(self):
+        if os.path.exists(self.config_path):
+            with open(self.config_path) as file:
+                self.config = json.load(file)
+        else:
+            self.config = {}
+        self.original_config_dump = json.dumps(self.config, sort_keys=True)
+
+    def write_config(self):
+        config_dump = json.dumps(self.config, sort_keys=True)
+        if self.original_config_dump != config_dump:
+            with open(self.config_path, 'w') as file:
+                json.dump(self.config, file, indent=2)
+
+    def configure_daily_hours(self, daily_hours):
+        if daily_hours:
+            self.daily_hours = daily_hours
+        else:
+            self.daily_hours = self.config.get(
+                'dailyHours') or DEFAULT_DAILY_HOURS
+        self.config['dailyHours'] = self.daily_hours
 
     def open_redmine(self):
-        config_path = os.path.expanduser(self.config_path)
-
-        if os.path.exists(config_path):
-            with open(config_path) as file:
-                config = json.load(file)
-        else:
-            config = {}
-        original_config_dump = json.dumps(config, sort_keys=True)
-
-        key = config.get('key')
+        key = self.config.get('key')
         if key:
             key = key.encode()
         else:
             key = Fernet.generate_key()
-            config['key'] = key.decode()
+            self.config['key'] = key.decode()
         fernet = Fernet(key)
 
-        redmine_config = config.get('redmine')
+        redmine_config = self.config.get('redmine')
         if not redmine_config:
             redmine_config = {}
-            config['redmine'] = redmine_config
+            self.config['redmine'] = redmine_config
 
         url = redmine_config.get('url')
         username_token = redmine_config.get('username')
@@ -116,10 +131,6 @@ class TimeLogger:
             self.default_activity = next(
                 e for e in activities if e.id == activity_id)
             redmine_config['activity'] = self.default_activity.name
-
-        if json.dumps(config, sort_keys=True) != original_config_dump:
-            with open(config_path, 'w') as file:
-                json.dump(config, file, indent=2)
 
     @classmethod
     def compute_hours_per_issue(cls, hours, issue_count):
@@ -308,13 +319,14 @@ def main():
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--log-date', help='log date', default='today')
     parser.add_argument('--daily-hours', help='daily hours',
-                        default=DEFAULT_DAILY_HOURS, type=float)
+                        default=None, type=float)
     options = parser.parse_args()
 
     if options.log_date == 'today':
         options.log_date = datetime.date.today()
     elif isinstance(options.log_date, str):
-        options.log_date = datetime.date.fromisoformat(options.log_date)
+        options.log_date = datetime.datetime.strptime(
+            options.log_date, '%Y-%m-%d').date()
 
     time_logger = TimeLogger(options.log_date, options.daily_hours)
 
