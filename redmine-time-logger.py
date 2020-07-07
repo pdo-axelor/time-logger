@@ -145,6 +145,7 @@ class TimeLogger:
 
     def allocate(self, allocations, to_allocate_issues):
         for issue_index, issue in zip(itertools.count(1), to_allocate_issues):
+            self.processed_issue_ids.add(issue.id)
             print(f'{issue_index}) {self.format_issue(issue)}', end='')
 
             default_comment = DEFAULT_COMMENTS.get(
@@ -187,12 +188,12 @@ class TimeLogger:
 
     def run_to_allocate_issues(self, allocations, to_allocate_issues):
         print(
-            _(f'Remaining {self.remaining_hours} hours to allocate on {len(to_allocate_issues)} issue ({self.log_date}):',
-                f'Remaining {self.remaining_hours} hours to allocate on {len(to_allocate_issues)} issues ({self.log_date}):',
+            _(f'Remaining {self.remaining_hours} hours to allocate on {len(to_allocate_issues)} issue ({self.log_date}) updated by you:',
+                f'Remaining {self.remaining_hours} hours to allocate on {len(to_allocate_issues)} issues ({self.log_date}) updated by you:',
                 len(to_allocate_issues)))
         for issue in to_allocate_issues:
             print(
-                f'{self.format_issue(issue)}{"" if self.commented_by_current_user(issue) else f" (not updated by you)"}')
+                f'{self.format_issue(issue)}')
         print()
         self.allocate(allocations, to_allocate_issues)
 
@@ -204,6 +205,7 @@ class TimeLogger:
             return None
 
     def run(self):
+        self.processed_issue_ids = set()
         worked_issue_ids = set()
         existing_time_entries = set()
         for time_entry in self.redmine.time_entry.filter(spent_on=self.log_date, user_id='me', sort='spent_on:desc'):
@@ -237,14 +239,15 @@ class TimeLogger:
         to_allocate_issues = []
         for issue in (e for e in self.redmine.issue.filter(limit=50, updated_on=self.log_date, updated_by='me', status_id='*', sort='id')
                       if e.id not in worked_issue_ids):
-            to_allocate_issues.append(issue)
+            if self.commented_by_current_user(issue):
+                to_allocate_issues.append(issue)
 
         allocations = []
 
         if to_allocate_issues:
             self.run_to_allocate_issues(allocations, to_allocate_issues)
         else:
-            print(_(f'Found no issues updated by you on {self.log_date}'))
+            print(_(f'Found no more issues updated by you on {self.log_date}'))
             print()
 
         if self.remaining_hours > 0:
@@ -281,14 +284,25 @@ class TimeLogger:
 
     def run_suggested_additional_issues(self, allocations):
         suggested_additional_issues = []
-        print(_(f'Recently updated open issues assigned to you:'))
-        for issue in self.redmine.issue.filter(limit=20, assigned_to_id='me', status_id='open', sort='updated_on:desc'):
-            if any(issue.id == allocation.issue.id for allocation in allocations):
+
+        print(_(f'Recently updated open issues watched by you:'))
+        for issue in self.redmine.issue.filter(limit=50, updated_on=self.log_date, updated_by='me', status_id='open', sort='updated_on:desc'):
+            if len(suggested_additional_issues) >= 10:
+                break
+            if issue.id in self.processed_issue_ids or self.commented_by_current_user(issue):
                 continue
             print(f'{self.format_issue(issue)}')
             suggested_additional_issues.append(issue)
+
+        print(_(f'Recently updated open issues assigned to you:'))
+        for issue in self.redmine.issue.filter(limit=20, assigned_to_id='me', status_id='open', sort='updated_on:desc'):
             if len(suggested_additional_issues) >= 10:
                 break
+            if issue.id in self.processed_issue_ids or any(issue.id == e.id for e in suggested_additional_issues):
+                continue
+            print(f'{self.format_issue(issue)}')
+            suggested_additional_issues.append(issue)
+
         print()
 
         suggested_additional_issue_map = {
