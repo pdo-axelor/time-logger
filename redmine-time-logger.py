@@ -218,13 +218,12 @@ class TimeLogger:
 
     def run(self):
         self.processed_issue_ids = set()
-        worked_issue_ids = set()
         existing_time_entries = set()
         for time_entry in self.redmine.time_entry.filter(spent_on=self.log_date, user_id='me', sort='spent_on:desc'):
             self.remaining_hours -= time_entry.hours
             issue = self.get_issue(time_entry)
             if issue:
-                worked_issue_ids.add(issue.id)
+                self.processed_issue_ids.add(issue.id)
             existing_time_entries.add(time_entry)
 
         print(
@@ -250,12 +249,12 @@ class TimeLogger:
 
         to_allocate_issues = []
         for issue in (e for e in self.redmine.issue.filter(limit=50, updated_on=self.log_date, updated_by='me', status_id='*', sort='id')
-                      if e.id not in worked_issue_ids):
+                      if e.id not in self.processed_issue_ids):
             if self.commented_by_current_user(issue):
                 to_allocate_issues.append(issue)
 
         for issue in (e for e in self.redmine.issue.filter(limit=50, created_on=self.log_date, author_id='me', status_id='*', sort='id')
-                      if e.id not in worked_issue_ids):
+                      if e.id not in self.processed_issue_ids):
             to_allocate_issues.append(issue)
 
         allocations = []
