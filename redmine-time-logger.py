@@ -49,12 +49,13 @@ Allocation = namedtuple('Allocation', ['issue', 'hours', 'comment'])
 class TimeLogger:
     config_path = os.path.expanduser('~/.time-logger.json')
 
-    def __init__(self, log_date, daily_hours):
+    def __init__(self, options):
         self.read_config()
-        self.log_date = log_date
-        self.configure_daily_hours(daily_hours)
+        self.log_date = options.log_date
+        self.configure_daily_hours(options.daily_hours)
         self.remaining_hours = self.daily_hours
         self.open_redmine()
+        self.configure_ignored_statuses(options.ignored_statuses)
         self.write_config()
 
     def read_config(self):
@@ -78,6 +79,13 @@ class TimeLogger:
             self.daily_hours = self.config.get(
                 'dailyHours') or DEFAULT_DAILY_HOURS
         self.config['dailyHours'] = self.daily_hours
+
+    def configure_ignored_statuses(self, ignored_status_names):
+        if ignored_status_names is None:
+            ignored_status_names = self.config.get('ignoredStatuses')
+        self.config['ignoredStatuses'] = ignored_status_names
+        self.ignored_status_ids = set(
+            e.id for e in self.redmine.issue_status.all() if e.name in ignored_status_names) if ignored_status_names else set()
 
     def open_redmine(self):
         key = self.config.get('key')
@@ -303,7 +311,9 @@ class TimeLogger:
 
         print(_(f'Recently updated open issues watched by you:'))
         for issue in self.redmine.issue.filter(limit=50, updated_on=self.log_date, updated_by='me', status_id='open', sort='updated_on:desc'):
-            if issue.id in self.processed_issue_ids or self.commented_by_current_user(issue):
+            if issue.status.id in self.ignored_status_ids\
+                    or issue.id in self.processed_issue_ids\
+                    or self.commented_by_current_user(issue):
                 continue
             print(f'{self.format_issue(issue)}')
             suggested_additional_issues.append(issue)
@@ -313,7 +323,9 @@ class TimeLogger:
         if len(suggested_additional_issues) < 10:
             print(_(f'Recently updated open issues assigned to you:'))
             for n, issue in enumerate(self.redmine.issue.filter(limit=50, assigned_to_id='me', status_id='open', sort='updated_on:desc')):
-                if issue.id in self.processed_issue_ids or any(issue.id == e.id for e in suggested_additional_issues):
+                if issue.status.id in self.ignored_status_ids\
+                        or issue.id in self.processed_issue_ids\
+                        or any(issue.id == e.id for e in suggested_additional_issues):
                     continue
                 print(f'{self.format_issue(issue)}')
                 suggested_additional_issues.append(issue)
@@ -351,6 +363,8 @@ def main():
     parser.add_argument('--log-date', help='log date', default='today')
     parser.add_argument('--daily-hours', help='daily hours',
                         default=None, type=float)
+    parser.add_argument('--ignored-statuses',
+                        help='ignored status names', type=str, nargs='*')
     options = parser.parse_args()
 
     if options.log_date == 'today':
@@ -359,7 +373,7 @@ def main():
         options.log_date = datetime.datetime.strptime(
             options.log_date, '%Y-%m-%d').date()
 
-    time_logger = TimeLogger(options.log_date, options.daily_hours)
+    time_logger = TimeLogger(options)
 
     try:
         return time_logger.run()
