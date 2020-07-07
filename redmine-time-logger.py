@@ -222,10 +222,10 @@ class TimeLogger:
             if issue:
                 issue = self.redmine.issue.get(time_entry.issue.id)
                 print(
-                    f'{self.format_issue(issue)}: {time_entry.comments} {time_entry.hours}')
+                    f'{self.format_issue(issue)}: {time_entry.hours} {time_entry.comments}')
             else:
                 print(
-                    f'{time_entry.project}: {time_entry.comments} {time_entry.hours}')
+                    f'{time_entry.project}: {time_entry.hours} {time_entry.comments}')
         print()
 
         if round(self.remaining_hours, 2) == 0:
@@ -287,21 +287,22 @@ class TimeLogger:
 
         print(_(f'Recently updated open issues watched by you:'))
         for issue in self.redmine.issue.filter(limit=50, updated_on=self.log_date, updated_by='me', status_id='open', sort='updated_on:desc'):
-            if len(suggested_additional_issues) >= 10:
-                break
             if issue.id in self.processed_issue_ids or self.commented_by_current_user(issue):
                 continue
             print(f'{self.format_issue(issue)}')
             suggested_additional_issues.append(issue)
-
-        print(_(f'Recently updated open issues assigned to you:'))
-        for issue in self.redmine.issue.filter(limit=20, assigned_to_id='me', status_id='open', sort='updated_on:desc'):
             if len(suggested_additional_issues) >= 10:
                 break
-            if issue.id in self.processed_issue_ids or any(issue.id == e.id for e in suggested_additional_issues):
-                continue
-            print(f'{self.format_issue(issue)}')
-            suggested_additional_issues.append(issue)
+
+        if len(suggested_additional_issues) < 10:
+            print(_(f'Recently updated open issues assigned to you:'))
+            for n, issue in enumerate(self.redmine.issue.filter(limit=50, assigned_to_id='me', status_id='open', sort='updated_on:desc')):
+                if issue.id in self.processed_issue_ids or any(issue.id == e.id for e in suggested_additional_issues):
+                    continue
+                print(f'{self.format_issue(issue)}')
+                suggested_additional_issues.append(issue)
+                if len(suggested_additional_issues) >= 10:
+                    break
 
         print()
 
