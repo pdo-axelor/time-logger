@@ -263,7 +263,8 @@ class TimeLogger:
         if to_allocate_issues:
             self.run_to_allocate_issues(allocations, to_allocate_issues)
         else:
-            print(_(f'Found no more issues updated/created by you on {self.log_date}'))
+            print(
+                _(f'Found no more issues updated/created by you on {self.log_date}'))
             print()
 
         if self.remaining_hours > 0:
