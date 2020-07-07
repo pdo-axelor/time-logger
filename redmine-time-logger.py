@@ -31,7 +31,7 @@ def _(singular, plural=None, n=0):
     return gettext.ngettext(singular, plural, n)
 
 
-Allocation = namedtuple('Allocation', ['issue', 'comment', 'hours'])
+Allocation = namedtuple('Allocation', ['issue', 'hours', 'comment'])
 
 
 class TimeLogger:
@@ -141,38 +141,38 @@ class TimeLogger:
 
             if issue_index < len(to_allocate_issues):
                 default_hours = self.compute_hours_per_issue(
-                    self.remaining_hours, len(to_allocate_issues) - len(allocations))
+                    self.remaining_hours, len(to_allocate_issues) - issue_index + 1)
             else:
                 default_hours = round(self.remaining_hours, 2)
 
-            comment_and_hours = input(' | ' +
-                                      _(f'comment and hours (default: {default_comment} {default_hours}): '))
-            comment, hours = self.parse_comment_and_hours(
-                comment_and_hours, default_comment, default_hours)
+            hours_and_comment = input(' | ' +
+                                      _(f'hours and comments (default: {default_hours} {default_comment}): '))
+            hours, comment = self.parse_hours_and_comment(
+                hours_and_comment, default_hours, default_comment)
 
             self.remaining_hours -= hours
 
             if hours:
-                allocations.append(Allocation(issue, comment, hours))
+                allocations.append(Allocation(issue, hours, comment))
         print()
 
     @classmethod
-    def parse_comment_and_hours(cls, comment_and_hours, default_comment, default_hours):
-        if not comment_and_hours:
-            comment = default_comment
+    def parse_hours_and_comment(cls, hours_and_comment, default_hours, default_comment):
+        if not hours_and_comment:
             hours = default_hours
+            comment = default_comment
         else:
             try:
-                comment, hours = comment_and_hours.rsplit(' ', 1)
+                hours, comment = hours_and_comment.split(' ', 1)
                 hours = float(hours)
             except ValueError:
                 try:
-                    hours = float(comment_and_hours)
+                    hours = float(hours_and_comment)
                     comment = default_comment
                 except ValueError:
-                    comment = comment_and_hours
                     hours = default_hours
-        return comment, hours
+                    comment = hours_and_comment
+        return hours, comment
 
     def run_to_allocate_issues(self, allocations, to_allocate_issues):
         print(
@@ -251,7 +251,7 @@ class TimeLogger:
         print(_(f'Time log to create:', 'Time logs to create:', len(allocations)))
         for allocation in allocations:
             print(
-                f'{self.format_issue(allocation.issue)}: {allocation.comment} {allocation.hours}')
+                f'{self.format_issue(allocation.issue)}: {allocation.hours:.2f} {allocation.comment}')
         confirm = input(_(f'Confirm? (y/N): ')).lower() == 'y'
 
         if not confirm:
@@ -270,7 +270,7 @@ class TimeLogger:
 
     def run_suggested_additional_issues(self, allocations):
         suggested_additional_issues = []
-        print(_(f'Suggested recently updated open issues assigned to you:'))
+        print(_(f'Recently updated open issues assigned to you:'))
         for issue in self.redmine.issue.filter(limit=20, assigned_to_id='me', status_id='open', sort='updated_on:desc'):
             if any(issue.id == allocation.issue.id for allocation in allocations):
                 continue
