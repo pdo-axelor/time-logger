@@ -242,12 +242,16 @@ class TimeLogger:
             if self.commented_by_current_user(issue):
                 to_allocate_issues.append(issue)
 
+        for issue in (e for e in self.redmine.issue.filter(limit=50, created_on=self.log_date, author_id='me', status_id='*', sort='id')
+                      if e.id not in worked_issue_ids):
+            to_allocate_issues.append(issue)
+
         allocations = []
 
         if to_allocate_issues:
             self.run_to_allocate_issues(allocations, to_allocate_issues)
         else:
-            print(_(f'Found no more issues updated by you on {self.log_date}'))
+            print(_(f'Found no more issues updated/created by you on {self.log_date}'))
             print()
 
         if self.remaining_hours > 0:
