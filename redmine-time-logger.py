@@ -208,8 +208,8 @@ class TimeLogger:
 
     def run_to_allocate_issues(self, allocations, to_allocate_issues):
         print(
-            _(f'Remaining {self.remaining_hours} hours to allocate on {len(to_allocate_issues)} issue ({self.log_date}) updated by you:',
-                f'Remaining {self.remaining_hours} hours to allocate on {len(to_allocate_issues)} issues ({self.log_date}) updated by you:',
+            _(f'Remaining {self.remaining_hours:.2f} hours to allocate on {len(to_allocate_issues)} issue ({self.log_date}) updated by you:',
+                f'Remaining {self.remaining_hours:.2f} hours to allocate on {len(to_allocate_issues)} issues ({self.log_date}) updated by you:',
                 len(to_allocate_issues)))
         for issue in to_allocate_issues:
             print(
@@ -252,7 +252,7 @@ class TimeLogger:
             return
 
         if self.remaining_hours < 0:
-            print(_(f'Negative remaining hours: {self.remaining_hours}'))
+            print(_(f'Negative remaining hours: {self.remaining_hours:.2f}'))
             return -1
 
         to_allocate_issues = []
@@ -275,8 +275,7 @@ class TimeLogger:
             print()
 
         if self.remaining_hours > 0:
-            if to_allocate_issues:
-                print(_(f'Hours still remaining: {self.remaining_hours}'))
+            print(_(f'Hours still remaining: {self.remaining_hours:.2f}'))
             search_suggested = input(
                 _(f'Search for more issues? (Y/n): ')).lower() != 'n'
             if search_suggested:
@@ -308,25 +307,30 @@ class TimeLogger:
 
     def run_suggested_additional_issues(self, allocations):
         suggested_additional_issues = []
+        show_title = True
 
-        print(_(f'Recently updated open issues watched by you:'))
         for issue in self.redmine.issue.filter(limit=50, updated_on=self.log_date, updated_by='me', status_id='open', sort='updated_on:desc'):
             if issue.status.id in self.ignored_status_ids\
                     or issue.id in self.processed_issue_ids\
                     or self.commented_by_current_user(issue):
                 continue
+            if show_title:
+                print(_(f'Recently updated open issues watched by you:'))
+                show_title = False
             print(f'{self.format_issue(issue)}')
             suggested_additional_issues.append(issue)
             if len(suggested_additional_issues) >= 10:
                 break
 
         if len(suggested_additional_issues) < 10:
-            print(_(f'Recently updated open issues assigned to you:'))
-            for n, issue in enumerate(self.redmine.issue.filter(limit=50, assigned_to_id='me', status_id='open', sort='updated_on:desc')):
+            for issue in self.redmine.issue.filter(limit=50, assigned_to_id='me', status_id='open', sort='updated_on:desc'):
                 if issue.status.id in self.ignored_status_ids\
                         or issue.id in self.processed_issue_ids\
                         or any(issue.id == e.id for e in suggested_additional_issues):
                     continue
+                if show_title:
+                    print(_(f'Recently updated open issues assigned to you:'))
+                    show_title = False
                 print(f'{self.format_issue(issue)}')
                 suggested_additional_issues.append(issue)
                 if len(suggested_additional_issues) >= 10:
