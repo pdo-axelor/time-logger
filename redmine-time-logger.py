@@ -268,7 +268,8 @@ class TimeLogger:
 
         for issue in (e for e in self.redmine.issue.filter(limit=50, created_on=self.log_date, author_id='me', status_id='*', sort='id')
                       if e.id not in self.processed_issue_ids):
-            to_allocate_issues.append(issue)
+            if not any(issue.id == e.id for e in to_allocate_issues):
+                to_allocate_issues.append(issue)
 
         allocations = []
 
