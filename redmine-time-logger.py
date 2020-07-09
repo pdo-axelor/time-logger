@@ -34,6 +34,11 @@ DEFAULT_COMMENTS = {
     'Feature': 'implement',
     'Support': 'feedback',
     'Proposal': 'feedback',
+    'Anomalie': 'fix',
+    'Evolution': 'implement',
+    'Fonctionnalité prévue': 'implement',
+    'Intervention/assistance': 'feedback',
+    'Pack': '',
 }
 
 
