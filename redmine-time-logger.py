@@ -29,16 +29,17 @@ import sys
 DEFAULT_DAILY_HOURS = 7.8
 
 DEFAULT_COMMENTS = {
-    None: 'wip',
-    'Anomaly': 'fix',
-    'Feature': 'implement',
-    'Support': 'feedback',
-    'Proposal': 'feedback',
-    'Anomalie': 'fix',
-    'Evolution': 'implement',
-    'Fonctionnalité prévue': 'implement',
-    'Intervention/assistance': 'feedback',
+    None: 'WIP',
+    'Anomaly': 'Fix',
+    'Feature': 'Implement',
+    'Support': 'Feedback',
+    'Proposal': 'Feedback',
+    'Anomalie': 'Fix',
+    'Evolution': 'Implement',
+    'Fonctionnalité prévue': 'Implement',
+    'Intervention/assistance': 'Feedback',
     'Pack': '',
+    'Project': 'On project',
 }
 
 
@@ -48,7 +49,7 @@ def _(singular, plural=None, n=0):
     return gettext.ngettext(singular, plural, n)
 
 
-Allocation = namedtuple('Allocation', ['issue', 'hours', 'comment'])
+Allocation = namedtuple('Allocation', ['issue', 'project', 'hours', 'comment', 'activity'])
 
 
 class TimeLogger:
@@ -141,20 +142,20 @@ class TimeLogger:
                 username_token = None
                 password_token = None
 
-        activities = list(self.redmine.enumeration.filter(
+        self.activities = list(self.redmine.enumeration.filter(
             resource='time_entry_activities'))
 
         activity_name = redmine_config.get('activity')
         if activity_name:
             self.default_activity = next(
-                e for e in activities if e.name == activity_name)
+                e for e in self.activities if e.name == activity_name)
         else:
             print('Activities:')
-            for activity in activities:
-                print(f'#{activity.id}: {activity.name}')
+            for activity in self.activities:
+                print(f'{activity.id}: {activity.name}')
             activity_id = int(input('Default activity ID: '))
             self.default_activity = next(
-                e for e in activities if e.id == activity_id)
+                e for e in self.activities if e.id == activity_id)
             redmine_config['activity'] = self.default_activity.name
 
     @classmethod
@@ -168,7 +169,7 @@ class TimeLogger:
     def commented_by_current_user(self, issue):
         return any(journal.created_on.date() == self.log_date and journal.user.id == self.current_user.id for journal in issue.journals)
 
-    def allocate(self, allocations, to_allocate_issues):
+    def allocate_issues(self, allocations, to_allocate_issues):
         for issue_index, issue in zip(itertools.count(1), to_allocate_issues):
             self.processed_issue_ids.add(issue.id)
             print(f'{issue_index}) {self.format_issue(issue)}', end='')
@@ -183,33 +184,87 @@ class TimeLogger:
                 default_hours = round(self.remaining_hours, 2)
 
             hours_and_comment = input(' | ' +
-                                      _(f'hours and comments (default: {default_hours} {default_comment}): '))
+                                      _(f'hours comments (default: {default_hours} {default_comment}): '))
             hours, comment = self.parse_hours_and_comment(
                 hours_and_comment, default_hours, default_comment)
 
             self.remaining_hours -= hours
 
             if hours:
-                allocations.append(Allocation(issue, hours, comment))
+                allocations.append(Allocation(issue, None, hours, comment, self.default_activity))
+        print()
+
+    def allocate_projects(self, allocations, to_allocate_projects):
+        try:
+            default_activity = next(activity for activity in self.activities if 'project' in activity.name.lower())
+        except StopIteration:
+            default_activity = self.activities[0] if self.activities else None
+
+        for project_index, project in zip(itertools.count(1), to_allocate_projects):
+            print(f'{project.name}', end='')
+
+            default_comment = DEFAULT_COMMENTS.get('Project', DEFAULT_COMMENTS[None])
+
+            if project_index < len(to_allocate_projects):
+                default_hours = self.compute_hours_per_issue(
+                    self.remaining_hours, len(to_allocate_projects) - project_index + 1)
+            else:
+                default_hours = round(self.remaining_hours, 2)
+
+            hours_comment_and_activity = input(' | ' +
+                                      _(f'hours comments activity_id (default: {default_hours} {default_comment} {default_activity.id}): '))
+            hours, comment, activity = self.parse_hours_comment_and_activity(
+                hours_comment_and_activity, default_hours, default_comment, default_activity)
+
+            self.remaining_hours -= hours
+
+            if hours:
+                allocations.append(Allocation(None, project, hours, comment, activity))
         print()
 
     @classmethod
-    def parse_hours_and_comment(cls, hours_and_comment, default_hours, default_comment):
-        if not hours_and_comment:
+    def parse_hours_and_comment(cls, text, default_hours, default_comment):
+        if not text:
             hours = default_hours
             comment = default_comment
         else:
             try:
-                hours, comment = hours_and_comment.split(' ', 1)
+                hours, comment = text.split(' ', 1)
                 hours = float(hours)
             except ValueError:
                 try:
-                    hours = float(hours_and_comment)
+                    hours = float(text)
                     comment = default_comment
                 except ValueError:
                     hours = default_hours
-                    comment = hours_and_comment
+                    comment = text
         return hours, comment
+
+    def parse_hours_comment_and_activity(self, text, default_hours, default_comment, default_activity):
+        if not text:
+            hours = default_hours
+            comment = default_comment
+            activity = default_activity
+        else:
+            try:
+                hours, comment = text.split(' ', 1)
+                hours = float(hours)
+                new_comment, activity_id = comment.rsplit(' ', 1)
+                activity_id = int(activity_id)
+                activity = next(activity for activity in self.activities if activity.id == activity_id)
+                comment = new_comment
+            except (ValueError, StopIteration):
+                try:
+                    hours = float(text)
+                    comment = default_comment
+                    activity = default_activity
+                except ValueError:
+                    hours = default_hours
+                    comment = text
+                    activity = default_activity
+
+        return hours, comment, activity
+
 
     def run_to_allocate_issues(self, allocations, to_allocate_issues):
         print(
@@ -220,7 +275,7 @@ class TimeLogger:
             print(
                 f'{self.format_issue(issue)}')
         print()
-        self.allocate(allocations, to_allocate_issues)
+        self.allocate_issues(allocations, to_allocate_issues)
 
     @classmethod
     def get_issue(cls, time_entry):
@@ -287,29 +342,65 @@ class TimeLogger:
             if search_suggested:
                 self.run_suggested_additional_issues(allocations)
 
+        if self.remaining_hours > 0 and input(_(f'Log time on projects? (Y/n): ')).lower() != 'n':
+            self.run_log_on_projects(allocations)
+
+
         if not allocations:
             print(_(f'Nothing to allocate'))
             return
 
         print(_(f'Time log to create:', 'Time logs to create:', len(allocations)))
         for allocation in allocations:
-            print(
-                f'{self.format_issue(allocation.issue)}: {allocation.hours:.2f} {allocation.comment}')
+            if allocation.issue:
+                print(
+                    f'{self.format_issue(allocation.issue)} | hours: {allocation.hours:.2f}, comment: {allocation.comment!r}, activity: {allocation.activity.name!r}')
+            elif allocation.project:
+                print(
+                    f'{allocation.project.name} | hours: {allocation.hours:.2f}, comment: {allocation.comment!r}, activity: {allocation.activity.name!r}')
         confirm = input(_(f'Confirm? (y/N): ')).lower() == 'y'
 
         if not confirm:
             return
 
         for allocation in allocations:
-            time_entry = self.redmine.time_entry.create(
-                issue_id=allocation.issue.id,
-                spent_on=self.log_date,
-                hours=f'{allocation.hours:.2f}',
-                comments=allocation.comment,
-                activity_id=self.default_activity.id
-            )
+            if allocation.issue:
+                time_entry = self.redmine.time_entry.create(
+                    issue_id=allocation.issue.id,
+                    spent_on=self.log_date,
+                    hours=f'{allocation.hours:.2f}',
+                    comments=allocation.comment,
+                    activity_id=allocation.activity.id
+                )
+            elif allocation.project:
+                time_entry = self.redmine.time_entry.create(
+                    project_id=allocation.project.id,
+                    spent_on=self.log_date,
+                    hours=f'{allocation.hours:.2f}',
+                    comments=allocation.comment,
+                    activity_id=allocation.activity.id
+                )
 
         print('Done')
+
+    def run_log_on_projects(self, allocations):
+        projects = []
+        print(_(f'Projects:'))
+        for project in self.redmine.project.all():
+            projects.append(project)
+            print(f'{project.id}: {project.name}')
+        print()
+
+        print(_(f'Activities:'))
+        for activity in self.activities:
+            print(f'{activity.id}: {activity.name}')
+        print()
+
+        project_ids = [int(e) for e in input(_(f'Project IDs: ')).split()]
+        if not project_ids:
+            return
+        to_allocate_projects = [project for project in projects if project.id in project_ids]
+        self.allocate_projects(allocations, to_allocate_projects)
 
     def run_suggested_additional_issues(self, allocations):
         suggested_additional_issues = []
@@ -364,7 +455,7 @@ class TimeLogger:
         else:
             additional_issues = default_additional_issues
 
-        self.allocate(allocations, additional_issues)
+        self.allocate_issues(allocations, additional_issues)
 
 
 def main():
