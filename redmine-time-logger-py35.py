@@ -54,13 +54,22 @@ Allocation = namedtuple(
 class TimeLogger:
     config_path = os.path.expanduser('~/.time-logger.json')
 
-    def __init__(self, options):
+    def __init__(self, options=None):
+        if options:
+            log_date = options.log_date
+            daily_hours = options.daily_hours
+            ignored_statuses = options.ignored_statuses
+        else:
+            log_date = datetime.date.today()
+            daily_hours = DEFAULT_DAILY_HOURS
+            ignored_statuses = None
+
         self.read_config()
-        self.log_date = options.log_date
-        self.configure_daily_hours(options.daily_hours)
+        self.log_date = log_date
+        self.configure_daily_hours(daily_hours)
         self.remaining_hours = self.daily_hours
         self.open_redmine()
-        self.configure_ignored_statuses(options.ignored_statuses)
+        self.configure_ignored_statuses(ignored_statuses)
         self.write_config()
 
     def read_config(self):
