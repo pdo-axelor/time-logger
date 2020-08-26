@@ -148,7 +148,7 @@ class TimeLogger:
             self.default_activity = next(
                 e for e in self.activities if e.name == activity_name)
         else:
-            print('Activities:')
+            print(_('Activities:'))
             for activity in self.activities:
                 print('{}: {}'.format((activity.id), (activity.name)))
             activity_id = int(input(_('Default activity ID for issues: ')))
@@ -350,10 +350,10 @@ class TimeLogger:
         for allocation in allocations:
             if allocation.issue:
                 print(
-                    '{} | hours: {:.2f}, comment: {!r}, activity: {!r}'.format((self.format_issue(allocation.issue)), (allocation.hours), (allocation.comment), (allocation.activity.name)))
+                    '{} | '.format((self.format_issue(allocation.issue))) + _('hours: {:.2f}, comment: {!r}, activity: {!r}'.format((allocation.hours), (allocation.comment), (allocation.activity.name))))
             elif allocation.project:
                 print(
-                    '{} | hours: {:.2f}, comment: {!r}, activity: {!r}'.format((allocation.project.name), (allocation.hours), (allocation.comment), (allocation.activity.name)))
+                    '{} | '.format((allocation.project.name)) + _('hours: {:.2f}, comment: {!r}, activity: {!r}'.format((allocation.hours), (allocation.comment), (allocation.activity.name))))
         confirm = input(_('Confirm? (y/N): ')).lower() == 'y'
 
         if not confirm:
@@ -377,7 +377,7 @@ class TimeLogger:
                     activity_id=allocation.activity.id
                 )
 
-        print('Done')
+        print(_('Done'))
 
     def run_log_on_projects(self, allocations):
         projects = []
