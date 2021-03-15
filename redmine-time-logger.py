@@ -32,7 +32,7 @@ DEFAULT_COMMENTS = {
     'Anomaly': 'Fix',
     'Feature': 'Implement',
     'Support': 'Feedback',
-    'Proposal': 'Feedback',
+    'Proposal': 'Implement',
     'Anomalie': 'Fix',
     'Evolution': 'Implement',
     'Fonctionnalité prévue': 'Implement',
