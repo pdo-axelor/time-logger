@@ -173,7 +173,7 @@ class TimeLogger:
 
     @classmethod
     def format_issue(cls, issue):
-        return f'{issue.project.name} - {issue.tracker.name} #{issue.id}: {issue.subject}'
+        return f'{issue.project.name} - {issue.tracker.name} {issue.id}: {issue.subject}'
 
     def commented_by_current_user(self, issue):
         return any(journal.created_on.date() == self.log_date

@@ -32,7 +32,7 @@ DEFAULT_COMMENTS = {
     'Anomaly': 'Fix',
     'Feature': 'Implement',
     'Support': 'Feedback',
-    'Proposal': 'Feedback',
+    'Proposal': 'Implement',
     'Anomalie': 'Fix',
     'Evolution': 'Implement',
     'Fonctionnalité prévue': 'Implement',
@@ -173,7 +173,7 @@ class TimeLogger:
 
     @classmethod
     def format_issue(cls, issue):
-        return '{} - {} #{}: {}'.format((issue.project.name), (issue.tracker.name), (issue.id), (issue.subject))
+        return '{} - {} {}: {}'.format((issue.project.name), (issue.tracker.name), (issue.id), (issue.subject))
 
     def commented_by_current_user(self, issue):
         return any(journal.created_on.date() == self.log_date
