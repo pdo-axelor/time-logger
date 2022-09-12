@@ -492,10 +492,10 @@ class TimeLogger:
 def main():
     parser = argparse.ArgumentParser(
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('--log-date', help='log date', default='today')
-    parser.add_argument('--daily-hours', help='daily hours',
+    parser.add_argument('--log-date', '-d', help='log date', default='today')
+    parser.add_argument('--daily-hours', '-H', help='daily hours',
                         default=None, type=float)
-    parser.add_argument('--ignored-statuses',
+    parser.add_argument('--ignored-statuses', '-i',
                         help='ignored status names', type=str, nargs='*')
     options = parser.parse_args()
 
